@@ -551,6 +551,7 @@ sub KernelImg
 
   for (@$k_files) {
     s#.*/boot/##;
+    s#.*/usr/lib/modules/[^/]+/##;
     next if /autoconf|config|shipped|version/;		# skip obvious garbage
     push @k_images, $_ if m#^$ConfigData{kernel_img}#;
   }
@@ -1216,7 +1217,15 @@ $ConfigData{fw_list} = $ConfigData{ini}{Firmware}{$arch} if $ConfigData{ini}{Fir
 
   my $k_dir = ReadRPM $ConfigData{kernel_rpm};
   if($k_dir) {
-    my @k_images = KernelImg [ `find $k_dir/rpm/boot -type f` ];
+    my $vml_dir = "$k_dir/rpm/boot";
+    my $mod_dir = "$k_dir/rpm/lib/modules/*/kernel/";
+    if (!-d $vml_dir) {
+      # UsrMerged kernel has no /boot and no -version_suffix
+      $vml_dir = "$k_dir/rpm/usr/lib/modules/*/";
+      $mod_dir = "${vml_dir}kernel/";
+      $ConfigData{kernel_img} =~ s/-$//;
+    }
+    my @k_images = KernelImg [ `find $vml_dir -type f` ];
 
     if(!@k_images) {
       die "Error: No kernel image identified! (Looking for \"$ConfigData{kernel_img}\".)\n\n";
@@ -1229,9 +1238,9 @@ $ConfigData{fw_list} = $ConfigData{ini}{Firmware}{$arch} if $ConfigData{ini}{Fir
     $ConfigData{kernel_img} = $k_images[0];
     $ConfigData{kernel_ver} = ReadFile "$k_dir/kernel";
 
-    my $mod_type = `find $k_dir/rpm/lib/modules/*/kernel/ -type f -name '*.ko*' -print -quit`;
+    my $mod_type = `find $mod_dir -type f -name '*.ko*' -print -quit`;
     if (!$mod_type) {
-      die "Error: No kernel module found! (Looking for '*.ko*' in '$k_dir/rpm/lib/modules/*/kernel/')\n\n";
+      die "Error: No kernel module found! (Looking for '*.ko*' in '$mod_dir')\n\n";
     }
     chomp $mod_type;
     $mod_type =~ /\.(ko(?:\.xz)?)$/;
